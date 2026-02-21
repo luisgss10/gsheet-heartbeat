@@ -1,16 +1,21 @@
-import os
-import json
+import os, json
 from datetime import datetime, timezone
 from dateutil import tz
 import gspread
+from gspread.exceptions import APIError
 from google.oauth2.service_account import Credentials
 
 def main():
-    sa_json = os.environ["GSHEET_SERVICE_ACCOUNT_JSON"]
-    spreadsheet_id = os.environ["SPREADSHEET_ID"]
+    sa_json = os.environ.get("GSHEET_SERVICE_ACCOUNT_JSON", "")
+    spreadsheet_id = os.environ.get("SPREADSHEET_ID", "")
     sheet_name = os.environ.get("SHEET_NAME", "Sheet1")
 
+    print("Spreadsheet ID present:", bool(spreadsheet_id), "len:", len(spreadsheet_id))
+    print("Sheet name:", sheet_name)
+    print("SA json present:", bool(sa_json), "len:", len(sa_json))
+
     info = json.loads(sa_json)
+    print("Service account:", info.get("client_email"))
 
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -19,17 +24,26 @@ def main():
     creds = Credentials.from_service_account_info(info, scopes=scopes)
     gc = gspread.authorize(creds)
 
-    sh = gc.open_by_key(spreadsheet_id)
-    ws = sh.worksheet(sheet_name)
+    try:
+        sh = gc.open_by_key(spreadsheet_id)
+        ws = sh.worksheet(sheet_name)
 
-    now_utc = datetime.now(timezone.utc)
-    now_pacific = now_utc.astimezone(tz.gettz("America/Los_Angeles"))
+        now_utc = datetime.now(timezone.utc)
+        now_pacific = now_utc.astimezone(tz.gettz("America/Los_Angeles"))
 
-    # Escribe en A2 y B2 siempre (modo “heartbeat”)
-    ws.update("A2", [[now_utc.isoformat()]])
-    ws.update("B2", [[now_pacific.strftime("%Y-%m-%d %H:%M:%S %Z")]])
+        ws.update("A2", [[now_utc.isoformat()]])
+        ws.update("B2", [[now_pacific.strftime("%Y-%m-%d %H:%M:%S %Z")]])
 
-    print("Updated:", now_utc.isoformat())
+        print("OK updated:", now_utc.isoformat())
+
+    except APIError as e:
+        resp = getattr(e, "response", None)
+        if resp is not None:
+            print("APIError status:", getattr(resp, "status_code", "unknown"))
+            txt = getattr(resp, "text", "")
+            print("APIError body head:", txt[:500])
+        print("Full error:", str(e))
+        raise
 
 if __name__ == "__main__":
     main()

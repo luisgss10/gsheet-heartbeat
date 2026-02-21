@@ -31,8 +31,15 @@ def main():
         now_utc = datetime.now(timezone.utc)
         now_pacific = now_utc.astimezone(tz.gettz("America/Los_Angeles"))
 
-        ws.update("A2", [[now_utc.isoformat()]])
-        ws.update("B2", [[now_pacific.strftime("%Y-%m-%d %H:%M:%S %Z")]])
+        if ws.acell("A1").value in (None, ""):
+            ws.update("A1:D1", [["idx", "last_update_utc", "last_update_pacific", "run_source"]])
+
+        idx = max(len(ws.get_all_values()) - 1, 0) + 1
+
+        ws.append_row(
+            [idx, now_utc.isoformat(), now_pacific.strftime("%Y-%m-%d %H:%M:%S %Z"), "github-actions"],
+            value_input_option="RAW",
+        )
 
         print("OK updated:", now_utc.isoformat())
 
